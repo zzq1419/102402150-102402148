@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="校园失物招领 —— 发布寻物与招领信息、按关键词与分类检索、查看详情并一键复制联系方式、找回后更新状态。">
+<meta name="theme-color" content="#07C160">
+<title>校园失物招领 · 失物招领与寻物信息平台</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- 上部滚动区 + 固定底部导航。滚动只发生在 #view 里，底部导航因此永远贴在屏幕底部 -->
+<div class="shell">
+  <main id="view" aria-live="polite">
+    <div class="view">
+      <div class="empty">
+        <h4>正在加载…</h4>
+        <p>如果一直停在这里，请确认 <code>js/</code> 下的脚本文件是否完整。</p>
+      </div>
+    </div>
+  </main>
+  <div id="tabbar"></div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<noscript>
+  <div style="max-width:480px;margin:24px auto;padding:20px;background:#fff;border-radius:14px;
+              font-family:sans-serif;line-height:1.7">
+    <b>需要开启 JavaScript</b><br>
+    本站是纯前端应用，所有逻辑都由 JavaScript 完成。请在浏览器设置里允许本站运行 JavaScript 后刷新页面。
+  </div>
+</noscript>
+
+<!-- 依赖顺序：数据 → 纯函数 → 仓库 → 视图 → 路由。全部是普通脚本，用 file:// 双击打开也能跑 -->
+<script src="js/data.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/store.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
