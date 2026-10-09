@@ -234,7 +234,12 @@ body.has-tabbar .view{padding-bottom:calc(var(--tabbar-h) + 26px)}
   width:52px;height:52px;border-radius:12px;flex:none;
   display:flex;align-items:center;justify-content:center;
   font-size:11px;font-weight:600;
+  overflow:hidden;               /* 有图片时把图片裁进圆角里 */
+  background:var(--bg);          /* 图片还没解码出来时的底色，避免闪一片白 */
 }
+/* 有图片的卡片：缩略图用第一张图片，铺满整个方块 */
+.thumb-img{padding:0}
+.thumb-img img{width:100%;height:100%;object-fit:cover;display:block}
 .card-main{flex:1;min-width:0}
 .card-title{
   font-size:14px;font-weight:600;line-height:1.35;

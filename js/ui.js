@@ -27,7 +27,21 @@
     return svg(DATA.ICON[name] || '', size || 18, color || '#5A6169', sw);
   }
 
-  function thumb(cat) {
+  /**
+   * 卡片左侧的缩略图。
+   * 发布时传的图片（浏览器本地压缩过的 dataURL）会一起存进数据里，列表上就该看得见 ——
+   * 所以：**有图片就用第一张，没有图片才退回分类图标**。
+   * 参数兼容两种写法：thumb(item) / thumb('水杯')。
+   */
+  function thumb(it) {
+    var item = (typeof it === 'string') ? { cat: it } : (it || {});
+    var imgs = item.images || [];
+    if (imgs.length) {
+      return '<div class="thumb thumb-img">'
+        + '<img src="' + E(imgs[0]) + '" alt="' + E(item.title || '物品图片') + '">'
+        + '</div>';
+    }
+    var cat = item.cat;
     var st = UTILS.catStyle(cat);
     return '<div class="thumb" style="background:' + st.bg + ';color:' + st.fg + '">'
       + svg(DATA.CAT_ICON[cat] || DATA.CAT_ICON['其他'], 26, st.fg, 1.8) + '</div>';
@@ -41,7 +55,7 @@
   function cardItem(it, q, showOwner) {
     var done = it.status === 'done';
     return '<a class="card' + (done ? ' is-done' : '') + '" href="#/detail/' + E(it.id) + '">'
-      + thumb(it.cat)
+      + thumb(it)
       + '<div class="card-main">'
       +   '<div class="card-title">' + UTILS.highlight(it.title, q) + '</div>'
       +   '<div class="card-tags">'
@@ -241,8 +255,10 @@
           )
 
       + fieldBlock('contact', '联系方式', true,
+          /* 默认带上"我"的联系方式（DATA.ME.contact）——同一台机器上发信息的人就是本人，
+             这样每次发布都不用再打一遍，想换成别的联系方式直接改这一格就行。 */
           '<input id="f-contact" type="text" name="contact" placeholder="手机号 / 邮箱 / 微信号" '
-          + 'maxlength="40" autocomplete="off">',
+          + 'maxlength="40" autocomplete="off" value="' + E(DATA.ME.contact) + '">',
           '<div class="count" data-contact-kind></div>')
 
       + fieldBlock('desc', '详细描述', false,
@@ -383,23 +399,50 @@
 
   /* ---------------------------------------------------------------- 我的发布 */
 
+  /** 空状态文案：标题 / 说明 / 按钮文字（按钮为 null 就不给按钮） */
+  var MINE_EMPTY = {
+    all:  ['你还没有发布过信息', '点底部中间的「+」按钮发布第一条吧。', '去发布'],
+    open: ['这一栏是空的', '换个筛选看看，或者去发布一条新的。', '去发布'],
+    done: ['这一栏是空的', '换个筛选看看，或者去发布一条新的。', '去发布'],
+    fav:  ['还没有收藏任何信息',
+           '在信息详情页点左下角的星标，就能把它收在这里，之后随时回来查看。',
+           '去首页逛逛']
+  };
+
   function viewMine(state, ctx) {
-    var mode = ctx.mode || 'all';                 // all | open | done
+    var mode = ctx.mode || 'all';                 // all | open | done | fav
     var mine = state.items.filter(function (it) { return it.owner; });
     var s = UTILS.statsOf(mine);
-    var list = UTILS.filterItems(mine, { status: mode, sort: 'status' });
+
+    /* 收藏是本地功能，编号存在 store 的 favs 里。这里取"被收藏的编号"与"现有信息"的**交集**：
+       收藏过但后来被删除、或被「恢复示例数据」清掉的编号会自然落空，
+       不会留下点不开的幽灵条目，计数也不会虚高。 */
+    var favs = state.favs || {};
+    var favList = UTILS.sortItems(state.items.filter(function (it) { return !!favs[it.id]; }), 'new');
+
+    /* 收藏列表里难免混着自己的信息，所以这一栏也标出「我发布的」 */
+    var showOwnerPill = (mode === 'fav');
+
+    var list = showOwnerPill
+      ? favList
+      : UTILS.filterItems(mine, { status: mode, sort: 'status' });
+
+    var empty = MINE_EMPTY[mode] || MINE_EMPTY.all;
 
     var body = list.length
-      ? '<div class="list">' + list.map(function (it) { return cardItem(it, '', false); }).join('') + '</div>'
-      : emptyState(mode === 'all' ? '你还没有发布过信息' : '这一栏是空的',
-          mode === 'all' ? '点底部中间的「+」按钮发布第一条吧。' : '换个筛选看看，或者去发布一条新的。',
-          '<a class="btn-main" href="#/publish/found" style="display:block;text-decoration:none">'
-          + '去发布</a>');
+      ? '<div class="list">' + list.map(function (it) {
+          return cardItem(it, '', showOwnerPill);
+        }).join('') + '</div>'
+      : emptyState(empty[0], empty[1], empty[2]
+          ? '<a class="btn-main" href="' + (mode === 'fav' ? '#/home' : '#/publish/found')
+            + '" style="display:block;text-decoration:none">' + empty[2] + '</a>'
+          : null);
 
     var tabs = [
-      { k: 'all', label: '全部 ' + s.total },
+      { k: 'all',  label: '全部 ' + s.total },
       { k: 'open', label: '待处理 ' + s.open },
-      { k: 'done', label: '已完成 ' + s.done }
+      { k: 'done', label: '已完成 ' + s.done },
+      { k: 'fav',  label: '收藏 ' + favList.length }
     ];
 
     return '<div class="view">'
@@ -416,7 +459,7 @@
       +   '<div><b class="b-open">' + s.open + '</b><span>待处理</span></div>'
       +   '<div><b class="b-done">' + s.done + '</b><span>已完成</span></div>'
       + '</div>'
-      + '<div class="sec-head"><h3>我发布的信息</h3>'
+      + '<div class="sec-head"><h3>' + (showOwnerPill ? '我收藏的信息' : '我发布的信息') + '</h3>'
       +   '<button class="more" data-act="reset">恢复示例数据</button></div>'
       + '<div style="padding:0 var(--page-pad) 10px">'
       +   '<div class="segment" data-mine-mode>' + tabs.map(function (t) {
