@@ -411,6 +411,7 @@
       ['发布成功页',    function () { return UI.viewSuccess(state, { kind: 'lost' }); }],
       ['信息详情页',    function () { return UI.viewDetail(state, { id: 'LF9001' }); }],
       ['我的发布页',    function () { return UI.viewMine(state, { mode: 'all' }); }],
+      ['我的发布·收藏', function () { return UI.viewMine(state, { mode: 'fav' }); }],
       ['底部导航',      function () { return UI.tabbar('home'); }]
     ];
 
@@ -481,6 +482,97 @@
         { items: [mk({ id: 'LF9001', title: evil, desc: evil, place: evil })], favs: {} }, { id: 'LF9001' });
       eq(html.indexOf('<img src=x'), -1, '注入的标签原样出现在 HTML 里了');
       ok(html.indexOf('&lt;img src=x') > -1, '应当以转义形式出现');
+    });
+  });
+
+  /* ============================================================ 收藏 / 缩略图 / 预填
+     这三处对应三件"功能做了一半"的事：
+       · 详情页能点星标收藏，但全站找不到已收藏的列表；
+       · 发布时能传图、详情页也显示，但列表卡片永远只画分类图标；
+       · DATA.ME.contact 早就定义好了，发布表单却是空的。
+     所以单独分一组盯住，避免以后再被改回去。 */
+
+  describe('收藏列表 / 卡片缩略图 / 发布页预填', function () {
+
+    /** 固定状态：items 用 FIXTURE，favs 用传入的收藏表 */
+    function st(favs) { return { items: FIXTURE, favs: favs || {} }; }
+
+    it(title('「我的发布」里有「收藏 N」分段，N 与真实收藏条数一致'), function () {
+      var html = UI.viewMine(st({ LF9002: 1, LF9003: 1 }), { mode: 'all' });
+      ok(html.indexOf('收藏 2') > -1, '分段标签应当显示收藏条数');
+      ok(html.indexOf('href="#/mine?mode=fav"') > -1, '收藏分段应当是可点的入口');
+      eq(html.indexOf('收藏 0'), -1, '已经收藏了 2 条，不该显示收藏 0');
+    });
+
+    it(title('切到收藏分段时列出被收藏的条目，包括别人发布的'), function () {
+      var html = UI.viewMine(st({ LF9003: 1 }), { mode: 'fav' });
+      ok(html.indexOf('href="#/detail/LF9003"') > -1, '收藏的条目应当以卡片形式出现');
+      eq(html.indexOf('LF9001'), -1, '没被收藏的条目不该出现在收藏列表里');
+      ok(html.indexOf('我收藏的信息') > -1, '标题应当跟着分段切换');
+    });
+
+    it(title('一条收藏都没有时给出空状态，并说清"怎么收藏"'), function () {
+      var html = UI.viewMine(st({}), { mode: 'fav' });
+      ok(html.indexOf('还没有收藏任何信息') > -1, '应当给出空状态标题');
+      ok(html.indexOf('星标') > -1, '应当告诉用户去详情页点星标');
+      ok(html.indexOf('收藏 0') > -1, '计数应当是 0');
+      eq(html.indexOf('NaN'), -1);
+    });
+
+    it(title('已归还 / 已找到的条目只要被收藏了也照样列出，不被状态过滤掉'), function () {
+      var html = UI.viewMine(st({ LF9004: 1 }), { mode: 'fav' });
+      ok(html.indexOf('href="#/detail/LF9004"') > -1, '已完成但被收藏的条目也应当列出来');
+      ok(html.indexOf('已找到') > -1, '卡片上的状态标签应当保留');
+    });
+
+    it(title('收藏编号已被删除或已被清空时，不出现幽灵条目，计数也不虚高'), function () {
+      var html = UI.viewMine(st({ LF9999: 1, LF9001: 1 }), { mode: 'fav' });
+      eq(html.indexOf('LF9999'), -1, '不存在的编号不该出现在页面上');
+      ok(html.indexOf('href="#/detail/LF9001"') > -1, '仍然存在的收藏应当保留');
+      ok(html.indexOf('收藏 1') > -1, '计数只算真实存在的收藏，不该是 2');
+    });
+
+    it(title('有图片的卡片显示第一张缩略图，没有图片才回退到分类图标'), function () {
+      var CAT_ICON_MARK = '<rect x="3" y="5.5"';   // 证件卡类图标的开头
+
+      var withImg = UI.cardItem(mk({ id: 'LF9101', images: ['data:image/jpeg;base64,AAAA'] }), '', false);
+      ok(withImg.indexOf('<img src="data:image/jpeg;base64,AAAA"') > -1, '有图片时应当渲染缩略图 <img>');
+      eq(withImg.indexOf(CAT_ICON_MARK), -1, '有图片时不该再画分类图标');
+
+      var noImg = UI.cardItem(mk({ id: 'LF9102', images: [] }), '', false);
+      eq(noImg.indexOf('<img'), -1, '没有图片时不该出现 <img>');
+      ok(noImg.indexOf(CAT_ICON_MARK) > -1, '没有图片时应当回退到分类图标');
+    });
+
+    it(title('首页 / 搜索页 / 我的发布 / 收藏列表 用的是同一套缩略图规则'), function () {
+      var items = [mk({ id: 'LF9103', owner: true, images: ['data:image/jpeg;base64,BBBB'] })];
+      var s = { items: items, favs: { LF9103: 1 } };
+      ok(UI.viewHome(s, {}).indexOf('base64,BBBB') > -1, '首页卡片应当显示缩略图');
+      ok(UI.viewSearch(s, { q: '' }).indexOf('base64,BBBB') > -1, '搜索页卡片应当显示缩略图');
+      ok(UI.viewMine(s, { mode: 'all' }).indexOf('base64,BBBB') > -1, '我的发布卡片应当显示缩略图');
+      ok(UI.viewMine(s, { mode: 'fav' }).indexOf('base64,BBBB') > -1, '收藏列表也应当显示缩略图');
+    });
+
+    it(title('图片地址里的引号会被转义，撑不破 src 属性（视图层防注入）'), function () {
+      var html = UI.cardItem(mk({ images: ['x" onerror="alert(1)'] }), '', false);
+      eq(html.indexOf('x" onerror="'), -1, '原始引号泄漏到属性外面了');
+      ok(html.indexOf('&quot;') > -1, '引号应当以 &quot; 的形式出现');
+    });
+
+    it(title('发布页的联系方式默认预填 DATA.ME.contact，招领页和寻物页都预填'), function () {
+      var want = 'value="' + DATA.ME.contact + '"';
+      ok(UI.viewPublish(st({}), {}, 'found').indexOf(want) > -1, '招领页应当预填联系方式');
+      ok(UI.viewPublish(st({}), {}, 'lost').indexOf(want) > -1, '寻物页也应当预填联系方式');
+    });
+
+    it(title('预填的联系方式本身是合法值，用户直接点发布不会被自己拦下'), function () {
+      ok(UTILS.isValidContact(DATA.ME.contact),
+        'DATA.ME.contact 应当是一种合法联系方式，否则预填反而会挡住发布');
+      eq(UTILS.validatePublish({
+        type: 'found', title: '校园卡（蓝色卡套）', cat: '证件卡类',
+        place: '第一教学楼 A302', timeText: '2026-10-07 09:00',
+        contact: DATA.ME.contact, desc: ''
+      }).ok, true, '带上预填的联系方式应当能直接通过校验');
     });
   });
 
